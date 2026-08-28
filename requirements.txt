@@ -1,5 +1,6 @@
 streamlit
 langchain
+langchain-community
 langchain-nvidia-ai-endpoints
 chromadb
 pdf2image
