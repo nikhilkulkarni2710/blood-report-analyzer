@@ -158,7 +158,10 @@ def process_uploaded_pdfs(files):
                     image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
                     prompt = (
                         "Extract all medical biomarkers, test names, results, units, and reference ranges "
-                        "from this image into a clean markdown table. Strictly ignore any advertisements, "
+                        "from this image into a clean markdown table. Format each line so it is completely "
+                        "independent and contains only one test. Use this format: "
+                        "[Biomarker: Vitamin B12] | Result: 250 pg/mL | Range: 200-900. "
+                        "Do not bundle unrelated tests into long paragraphs. Strictly ignore any advertisements, "
                         "promotional headers, pricing, or non-medical clinic banners. Never extract, repeat, "
                         "or infer names, addresses, phone numbers, email addresses, dates of birth, patient "
                         "IDs, or any other personally identifying information."
@@ -352,27 +355,28 @@ if "vector_db" in st.session_state:
             st.markdown(user_query)
         st.session_state.messages.append({"role": "user", "content": user_query})
 
-        custom_prompt_template = """You are an expert AI Clinical Data Analyst. 
-Your task is to analyze the historical medical blood reports provided in the context below. 
+        custom_prompt_template = """You are a precise Medical Data Filtering Assistant.
+    The user is asking about a specific biomarker or condition.
 
-When the user asks about a specific biomarker (like Vitamin D, Iron, or Sugar), do NOT just repeat the raw text. Instead, generate a comprehensive trend analysis by executing these steps:
-1. Extract ALL instances of that biomarker across every provided report date.
-2. Structure them into a clean markdown timeline table (Date | Result Value | Reference Range | Status).
-3. Identify the trend: State clearly if the levels are steady, rising, falling, or consistently out of range.
-4. Give a brief, clinical summary explaining what this trend implies based on standard reference ranges.
+    Instructions:
+    1. Scan the Context below and look ONLY for rows or text explicitly naming the requested item.
+    2. If a piece of data in the context discusses a completely different biomarker, you MUST ignore that segment completely. Do not mention it.
+    3. Group the filtered matches into a clean chronological timeline table showing Date, Result, Range, and Status.
+    4. If no information about the requested biomarker exists in the context, say "No relevant data found for this biomarker."
 
-If the data is completely missing from the reports, explicitly state: "Biomarker not found in historical records."
+    Context:
+    {context}
 
-Context:
-{context}
-
-Question: {question}
-Answer:"""
+    Question: {question}
+    Answer:"""
 
 
         PROMPT = PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
 
-        retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": 4})
+        retriever = st.session_state.vector_db.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": 8, "fetch_k": 25},
+        )
         with st.chat_message("assistant"):
             with st.spinner("Analyzing health history..."):
                 if llm is not None:
