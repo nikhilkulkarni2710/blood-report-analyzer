@@ -11,8 +11,8 @@ from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_classic.chains import RetrievalQA
+from langchain_core.prompts import PromptTemplate
 
 # --- 1. Page Configuration & UI Styling ---
 st.set_page_config(page_title="Blood Report AI Analyzer", page_icon="🩸", layout="wide")
