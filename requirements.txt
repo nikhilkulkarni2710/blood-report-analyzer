@@ -1,0 +1,6 @@
+streamlit
+langchain
+langchain-nvidia-ai-endpoints
+chromadb
+pdf2image
+pillow
