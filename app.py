@@ -289,16 +289,23 @@ if "vector_db" in st.session_state:
             st.markdown(user_query)
         st.session_state.messages.append({"role": "user", "content": user_query})
 
-        # Set up a highly strict medical RAG Prompt
-        custom_prompt_template = """You are an expert AI clinical health data analyzer. 
-Use the retrieved context (historical blood reports) below to accurately answer the question.
-If the data required to answer is missing or cannot be found in the provided context, state that the data is not available. Do not hallucinate or guess numbers or reference ranges.
+        custom_prompt_template = """You are an expert AI Clinical Data Analyst. 
+Your task is to analyze the historical medical blood reports provided in the context below. 
+
+When the user asks about a specific biomarker (like Vitamin D, Iron, or Sugar), do NOT just repeat the raw text. Instead, generate a comprehensive trend analysis by executing these steps:
+1. Extract ALL instances of that biomarker across every provided report date.
+2. Structure them into a clean markdown timeline table (Date | Result Value | Reference Range | Status).
+3. Identify the trend: State clearly if the levels are steady, rising, falling, or consistently out of range.
+4. Give a brief, clinical summary explaining what this trend implies based on standard reference ranges.
+
+If the data is completely missing from the reports, explicitly state: "Biomarker not found in historical records."
 
 Context:
 {context}
 
 Question: {question}
 Answer:"""
+
 
         PROMPT = PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
 
