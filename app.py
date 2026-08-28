@@ -142,15 +142,25 @@ def process_uploaded_pdfs(files):
                     "IDs, or any other personally identifying information."
                 )
                 
-                clean_text_output = llm.invoke([
-                    HumanMessage(content=[
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                try:
+                    clean_text_output = llm.invoke([
+                        HumanMessage(content=[
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                        ])
                     ])
-                ])
+                    extracted_text = clean_text_output.content
+                except Exception as model_error:
+                    st.warning(
+                        f"Vision model unavailable for {uploaded_file.name}; using local OCR instead."
+                    )
+                    extracted_text = pytesseract.image_to_string(page_image, config="--psm 6")
+                    if not extracted_text.strip():
+                        st.warning(f"No text could be extracted from page {page_num + 1}.")
+                        continue
                 
                 doc = Document(
-                    page_content=clean_text_output.content,
+                    page_content=extracted_text,
                     metadata={"source": f"Report {idx + 1}", "page": page_num + 1}
                 )
                 documents_to_embed.append(doc)
