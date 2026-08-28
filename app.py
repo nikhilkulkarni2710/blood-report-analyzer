@@ -251,12 +251,20 @@ def relevant_report_text(documents, query):
                 unit = re.sub(r"\s+", "", match.group("unit")).lower()
                 interpretation = "Deficient" if unit == "ng/ml" and value < 20 else ""
                 content = (
-                    f"Vitamin D (25-OH): {match.group('value')} {unit}"
-                    + (f" ({interpretation})" if interpretation else "")
+                    "| Test | Result | Status |\n"
+                    "|---|---:|---|\n"
+                    f"| Vitamin D (25-OH) | {match.group('value')} {unit} | "
+                    f"{interpretation or 'Within extracted range'} |"
                 )
             else:
                 content = ""
         if content.strip():
+            if aliases and not vitamin_d_pattern:
+                content = (
+                    "| Reported result |\n"
+                    "|---|\n"
+                    + "\n".join(f"| {line} |" for line in content.splitlines())
+                )
             results.append(
                 f"**{document.metadata.get('source', 'Report')}, "
                 f"page {document.metadata.get('page', '?')}**\n\n{content}"
