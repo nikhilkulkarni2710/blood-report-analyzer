@@ -39,9 +39,11 @@ with st.sidebar:
 # Initialize models globally
 @st.cache_resource
 def load_models():
-    # Using VILA for layout/vision reasoning, and NV-EmbedQA for matching medical terminology
-    llm = ChatNVIDIA(model="nvidia/vila-15-8b", temperature=0.1)
-    embeddings = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5")
+    # Production multimodal text/vision reasoning model
+    llm = ChatNVIDIA(model="microsoft/phi-3-vision-128k-instruct", temperature=0.1)
+    
+    # Production QA long-document embedding engine
+    embeddings = NVIDIAEmbeddings(model="nvidia/nv-embed-qa-4")
     return llm, embeddings
 
 llm, embeddings = load_models()
