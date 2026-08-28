@@ -6,9 +6,11 @@ import streamlit as st
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw
 import pytesseract
-from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, ChatNVIDIA
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_classic.chains import RetrievalQA
@@ -20,10 +22,17 @@ st.title("🩸 Multimodal Blood Report AI Analyzer")
 st.caption("Upload historical reports, parse unstructured data, and analyze trends using NVIDIA NIM & RAG.")
 
 # --- 2. Sidebar Configuration ---
+try:
+    streamlit_api_key = st.secrets.get("NVIDIA_API_KEY", "")
+    streamlit_use_vision = st.secrets.get("USE_VISION_MODEL", "false")
+except st.errors.StreamlitSecretNotFoundError:
+    streamlit_api_key = ""
+    streamlit_use_vision = "false"
+
 with st.sidebar:
-    api_key = os.environ.get("NVIDIA_API_KEY", "")
+    api_key = os.environ.get("NVIDIA_API_KEY", streamlit_api_key)
     use_vision_model = str(
-        st.secrets.get("USE_VISION_MODEL", os.environ.get("USE_VISION_MODEL", "false"))
+        os.environ.get("USE_VISION_MODEL", streamlit_use_vision)
     ).lower() == "true"
 if not api_key:
     st.error("Missing NVIDIA_API_KEY environment variable. Please add it to your Space Secrets.")
@@ -40,13 +49,24 @@ with st.sidebar:
     process_btn = st.button("🚀 Process & Build Vector DB", disabled=not uploaded_files)
 
 # Initialize models globally
+class LocalChromaEmbeddings(Embeddings):
+    def __init__(self):
+        self.embedding_function = DefaultEmbeddingFunction()
+
+    def embed_documents(self, texts):
+        return [embedding.tolist() for embedding in self.embedding_function(texts)]
+
+    def embed_query(self, text):
+        return self.embedding_function([text])[0].tolist()
+
+
 @st.cache_resource
 def load_models():
     # Production multimodal text/vision reasoning model
     llm = ChatNVIDIA(model="nvidia/neva-22b", temperature=0.1)
     
-    # Production QA long-document embedding engine
-    embeddings = NVIDIAEmbeddings(model="NV-Embed-QA")
+    # Use Chroma's local embedding model to avoid hosted embedding API failures.
+    embeddings = LocalChromaEmbeddings()
     return llm, embeddings
 
 llm, embeddings = load_models()
