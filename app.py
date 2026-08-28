@@ -22,6 +22,9 @@ st.caption("Upload historical reports, parse unstructured data, and analyze tren
 # --- 2. Sidebar Configuration ---
 with st.sidebar:
     api_key = os.environ.get("NVIDIA_API_KEY", "")
+    use_vision_model = str(
+        st.secrets.get("USE_VISION_MODEL", os.environ.get("USE_VISION_MODEL", "false"))
+    ).lower() == "true"
 if not api_key:
     st.error("Missing NVIDIA_API_KEY environment variable. Please add it to your Space Secrets.")
     st.stop()
@@ -128,36 +131,36 @@ def process_uploaded_pdfs(files):
             
             for page_num, page_image in enumerate(pages):
                 page_image = redact_personal_information(page_image)
-                page_image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
-                image_buffer = BytesIO()
-                page_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
-                image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
-                
-                # Instruction to filter out promotions and grab structured data
-                prompt = (
-                    "Extract all medical biomarkers, test names, results, units, and reference ranges "
-                    "from this image into a clean markdown table. Strictly ignore any advertisements, "
-                    "promotional headers, pricing, or non-medical clinic banners. Never extract, repeat, "
-                    "or infer names, addresses, phone numbers, email addresses, dates of birth, patient "
-                    "IDs, or any other personally identifying information."
-                )
-                
-                try:
-                    clean_text_output = llm.invoke([
-                        HumanMessage(content=[
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
-                        ])
-                    ])
-                    extracted_text = clean_text_output.content
-                except Exception as model_error:
-                    st.warning(
-                        f"Vision model unavailable for {uploaded_file.name}; using local OCR instead."
+                if use_vision_model:
+                    page_image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                    image_buffer = BytesIO()
+                    page_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
+                    image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+                    prompt = (
+                        "Extract all medical biomarkers, test names, results, units, and reference ranges "
+                        "from this image into a clean markdown table. Strictly ignore any advertisements, "
+                        "promotional headers, pricing, or non-medical clinic banners. Never extract, repeat, "
+                        "or infer names, addresses, phone numbers, email addresses, dates of birth, patient "
+                        "IDs, or any other personally identifying information."
                     )
+                    try:
+                        clean_text_output = llm.invoke([
+                            HumanMessage(content=[
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                            ])
+                        ])
+                        extracted_text = clean_text_output.content
+                    except Exception:
+                        st.warning(
+                            f"Vision model unavailable for {uploaded_file.name}; using local OCR instead."
+                        )
+                        extracted_text = pytesseract.image_to_string(page_image, config="--psm 6")
+                else:
                     extracted_text = pytesseract.image_to_string(page_image, config="--psm 6")
-                    if not extracted_text.strip():
-                        st.warning(f"No text could be extracted from page {page_num + 1}.")
-                        continue
+                if not extracted_text.strip():
+                    st.warning(f"No text could be extracted from page {page_num + 1}.")
+                    continue
                 
                 doc = Document(
                     page_content=extracted_text,
