@@ -3,6 +3,7 @@ import base64
 import re
 from io import BytesIO
 import streamlit as st
+import pandas as pd
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw
 import pytesseract
@@ -262,6 +263,60 @@ def relevant_report_text(documents, query):
             )
     return "\n\n".join(results)
 
+
+def biomarker_chart_data(documents, query):
+    query_lower = query.lower()
+    biomarker_aliases = {
+        "vitamin d": ("vitamin d", "25-oh", "25 oh", "25(oh)d", "cholecalciferol"),
+        "vitamin b12": ("vitamin b12", "b12", "cobalamin"),
+        "hemoglobin": ("hemoglobin", "haemoglobin", "hb"),
+        "glucose": ("glucose", "blood sugar", "hba1c", "glycated hemoglobin"),
+        "cholesterol": ("cholesterol", "ldl", "hdl", "triglyceride"),
+    }
+    biomarker = next(
+        (name for name in biomarker_aliases if name in query_lower),
+        None,
+    )
+    if not biomarker:
+        return None, None
+
+    aliases = biomarker_aliases[biomarker]
+    value_pattern = re.compile(
+        r"(?P<value>\d+(?:\.\d+)?)\s*"
+        r"(?:ng\s*/?\s*ml|mg\s*/?\s*dl|g\s*/?\s*dl|%)?",
+        re.IGNORECASE,
+    )
+    vitamin_d_value_pattern = re.compile(
+        r"vitamin\s*d\s*\(?(?:25\s*-?\s*oh)?\)?[^\d]{0,120}"
+        r"(?P<value>\d+(?:\.\d+)?)\s*(?:ng\s*/?\s*ml|nmol\s*/?\s*l)",
+        re.IGNORECASE,
+    )
+    points = []
+    for document in documents:
+        for line in document.page_content.splitlines():
+            line_lower = line.lower()
+            if not any(alias in line_lower for alias in aliases):
+                continue
+            match = (
+                vitamin_d_value_pattern.search(line)
+                if biomarker == "vitamin d"
+                else value_pattern.search(line)
+            )
+            if not match:
+                continue
+            points.append({
+                "Report": document.metadata.get("source", "Report"),
+                "Page": document.metadata.get("page", "?"),
+                "Value": float(match.group("value")),
+            })
+            break
+
+    if not points:
+        return None, None
+    chart = pd.DataFrame(points)
+    chart["Reading"] = chart["Report"] + " / page " + chart["Page"].astype(str)
+    return chart.set_index("Reading")["Value"], biomarker.title()
+
 # Trigger processing when button is clicked
 if process_btn:
     with st.spinner("Analyzing layouts and constructing data mapping... This takes a few moments per PDF."):
@@ -325,6 +380,10 @@ Answer:"""
                     response = relevant_report_text(matching_documents, user_query)
                     if not response:
                         response = "No matching report data was found."
+                    chart_data, chart_name = biomarker_chart_data(matching_documents, user_query)
+                    if chart_data is not None:
+                        st.subheader(f"{chart_name} trend")
+                        st.line_chart(chart_data)
                 st.markdown(response)
                 st.caption("⚠️ *Results are extracted from the uploaded files. Consult a physician for interpretation.*")
         
