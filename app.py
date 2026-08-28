@@ -46,7 +46,7 @@ def load_models():
     llm = ChatNVIDIA(model="nvidia/neva-22b", temperature=0.1)
     
     # Production QA long-document embedding engine
-    embeddings = NVIDIAEmbeddings(model="nvidia/embed-qa-4")
+    embeddings = NVIDIAEmbeddings(model="NV-Embed-QA")
     return llm, embeddings
 
 llm, embeddings = load_models()
