@@ -207,6 +207,40 @@ def process_uploaded_pdfs(files):
     progress_bar.empty()
     return vector_db
 
+
+def relevant_report_text(documents, query):
+    query_lower = query.lower()
+    biomarker_aliases = {
+        "vitamin d": ("vitamin d", "25-oh", "25 oh", "25(oh)d", "cholecalciferol"),
+        "vitamin b12": ("vitamin b12", "b12", "cobalamin"),
+        "hemoglobin": ("hemoglobin", "haemoglobin", "hb"),
+        "glucose": ("glucose", "blood sugar", "hba1c", "glycated hemoglobin"),
+        "cholesterol": ("cholesterol", "ldl", "hdl", "triglyceride"),
+    }
+    aliases = next(
+        (terms for name, terms in biomarker_aliases.items() if name in query_lower),
+        (),
+    )
+
+    results = []
+    for document in documents:
+        lines = document.page_content.splitlines()
+        if aliases:
+            matched_lines = [
+                line.strip()
+                for line in lines
+                if any(alias in line.lower() for alias in aliases)
+            ]
+            content = "\n".join(matched_lines)
+        else:
+            content = document.page_content
+        if content.strip():
+            results.append(
+                f"**{document.metadata.get('source', 'Report')}, "
+                f"page {document.metadata.get('page', '?')}**\n\n{content}"
+            )
+    return "\n\n".join(results)
+
 # Trigger processing when button is clicked
 if process_btn:
     with st.spinner("Analyzing layouts and constructing data mapping... This takes a few moments per PDF."):
@@ -260,12 +294,7 @@ Answer:"""
                     response = rag_chain.run(user_query)
                 else:
                     matching_documents = retriever.invoke(user_query)
-                    response = "\n\n".join(
-                        f"**{document.metadata.get('source', 'Report')}, "
-                        f"page {document.metadata.get('page', '?')}**\n\n"
-                        f"{document.page_content}"
-                        for document in matching_documents
-                    )
+                    response = relevant_report_text(matching_documents, user_query)
                     if not response:
                         response = "No matching report data was found."
                 st.markdown(response)
