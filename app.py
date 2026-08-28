@@ -128,8 +128,9 @@ def process_uploaded_pdfs(files):
             
             for page_num, page_image in enumerate(pages):
                 page_image = redact_personal_information(page_image)
+                page_image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
                 image_buffer = BytesIO()
-                page_image.save(image_buffer, format="PNG")
+                page_image.save(image_buffer, format="JPEG", quality=85, optimize=True)
                 image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
                 
                 # Instruction to filter out promotions and grab structured data
@@ -144,7 +145,7 @@ def process_uploaded_pdfs(files):
                 clean_text_output = llm.invoke([
                     HumanMessage(content=[
                         {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
                     ])
                 ])
                 
