@@ -222,6 +222,15 @@ def relevant_report_text(documents, query):
         (),
     )
 
+    if "vitamin d" in query_lower:
+        vitamin_d_pattern = re.compile(
+            r"vitamin\s*d\s*\(?(?:25\s*-?\s*oh)?\)?[^\d]{0,120}"
+            r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ng\s*/?\s*ml|nmol\s*/?\s*l)",
+            re.IGNORECASE,
+        )
+    else:
+        vitamin_d_pattern = None
+
     results = []
     for document in documents:
         lines = document.page_content.splitlines()
@@ -234,6 +243,18 @@ def relevant_report_text(documents, query):
             content = "\n".join(matched_lines)
         else:
             content = document.page_content
+        if vitamin_d_pattern:
+            match = vitamin_d_pattern.search(document.page_content)
+            if match:
+                value = float(match.group("value"))
+                unit = re.sub(r"\s+", "", match.group("unit")).lower()
+                interpretation = "Deficient" if unit == "ng/ml" and value < 20 else ""
+                content = (
+                    f"Vitamin D (25-OH): {match.group('value')} {unit}"
+                    + (f" ({interpretation})" if interpretation else "")
+                )
+            else:
+                content = ""
         if content.strip():
             results.append(
                 f"**{document.metadata.get('source', 'Report')}, "
