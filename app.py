@@ -62,8 +62,7 @@ class LocalChromaEmbeddings(Embeddings):
 
 @st.cache_resource
 def load_models():
-    # Production multimodal text/vision reasoning model
-    llm = ChatNVIDIA(model="nvidia/neva-22b", temperature=0.1)
+    llm = ChatNVIDIA(model="nvidia/neva-22b", temperature=0.1) if use_vision_model else None
     
     # Use Chroma's local embedding model to avoid hosted embedding API failures.
     embeddings = LocalChromaEmbeddings()
@@ -248,20 +247,29 @@ Answer:"""
 
         PROMPT = PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
 
-        # Execute Retrieval Augmented Generation
         retriever = st.session_state.vector_db.as_retriever(search_kwargs={"k": 4})
-        rag_chain = RetrievalQA.from_chain_type(
-            llm=llm, 
-            chain_type="stuff", 
-            retriever=retriever,
-            chain_type_kwargs={"prompt": PROMPT}
-        )
-        
         with st.chat_message("assistant"):
             with st.spinner("Analyzing health history..."):
-                response = rag_chain.run(user_query)
+                if llm is not None:
+                    rag_chain = RetrievalQA.from_chain_type(
+                        llm=llm,
+                        chain_type="stuff",
+                        retriever=retriever,
+                        chain_type_kwargs={"prompt": PROMPT},
+                    )
+                    response = rag_chain.run(user_query)
+                else:
+                    matching_documents = retriever.invoke(user_query)
+                    response = "\n\n".join(
+                        f"**{document.metadata.get('source', 'Report')}, "
+                        f"page {document.metadata.get('page', '?')}**\n\n"
+                        f"{document.page_content}"
+                        for document in matching_documents
+                    )
+                    if not response:
+                        response = "No matching report data was found."
                 st.markdown(response)
-                st.caption("⚠️ *Disclaimer: Generated metrics are for informational purposes based on files provided. Always consult a physician.*")
+                st.caption("⚠️ *Results are extracted from the uploaded files. Consult a physician for interpretation.*")
         
         st.session_state.messages.append({"role": "assistant", "content": response})
 else:
