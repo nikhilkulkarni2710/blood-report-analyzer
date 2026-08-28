@@ -40,10 +40,10 @@ with st.sidebar:
 @st.cache_resource
 def load_models():
     # Production multimodal text/vision reasoning model
-    llm = ChatNVIDIA(model="meta/llama-3.2-11b-vision-instruct", temperature=0.1)
+    llm = ChatNVIDIA(model="nvidia/neva-22b", temperature=0.1)
     
     # Production QA long-document embedding engine
-    embeddings = NVIDIAEmbeddings(model="nvidia/nv-embed-qa-4")
+    embeddings = NVIDIAEmbeddings(model="nvidia/embed-qa-4")
     return llm, embeddings
 
 llm, embeddings = load_models()
